@@ -1,0 +1,123 @@
+#
+#
+#务必不要遮挡炒股界面，因为要用到数字识别！！
+#
+#20191009 遇到的问题；
+#PermissionError: [Errno 13] Permission denied: 'd:\\test_scr.jpg'
+#部分时候识别不了，为空字符串，字体不够大？颜色区分度不够？
+from PIL import Image
+import pyautogui
+import time
+import pytesseract
+import os
+import subprocess
+
+#-----首先修改这里，捷利交易宝（辉立暗盘）采用识别，只能监控1个股-----
+global STOCK_CODE
+STOCK_CODE='HK.06666'
+#1、IPO最终定价多少
+BENCHMARK_PRICE= 8.8
+#2、可以忍受亏损比例
+PERCENT_2_LOST= 0.05
+#3、自动算出允许损失的绝对值。benchmark是阶段最高价，当现价与最高价之差，大于或等于该ZHI_SUN(止损值），将执行卖出。这里严格遵守纪律！
+bear_line=BENCHMARK_PRICE*PERCENT_2_LOST
+#4、注意设置一个断点！！
+
+test_PATH="d:\\num.font.exp0.tif"
+print(time.time())
+str1=pytesseract.image_to_string(test_PATH,lang='digits',config='--psm 7')
+#str1=pytesseract.image_to_string(test_PATH,lang='digits',config='--psm 7')
+#str1=pytesseract.image_to_string(test_PATH,lang='digits',config='--psm 7')
+print(time.time())
+str2=pytesseract.image_to_string(test_PATH,lang='num',config='--psm 7')
+#str2=pytesseract.image_to_string(test_PATH,lang='num',config='--psm 7')
+#str2=pytesseract.image_to_string(test_PATH,lang='num',config='--psm 7')
+print(time.time())
+
+#现价所在的位置（数字最大）
+# 特别注意：参数格式是起始点(X,Y)，X宽度，Y高度
+now_value_x=895
+now_value_y=79
+now_value_x_width=125
+now_value_x_height=30
+
+#最高价所在位置
+#特别注意：参数格式是起始点(X,Y)，X宽度，Y高度
+high_value_x=950
+high_value_y=167
+high_value_x_width=58
+high_value_x_height=20
+
+#只卖出一次标记
+SELL_ONCE=1
+
+#交易宝专用测试文件
+fo = open("C:\\9\\huili_anpan_jiaoyibao.txt", "a")
+
+#以下是暗盘前测试交易宝界面的现价和最高价
+start_time_now_value=time.time()
+test_img_scr=pyautogui.screenshot(region=[now_value_x,now_value_y,now_value_x_width,now_value_x_height])
+test_value=pytesseract.image_to_string(test_img_scr,lang='digits',config='--psm 7')
+test_value_float=float(test_value.replace(" ",""))
+end_time_now_value=time.time()
+
+start_time_high_value=time.time()
+test_img_high=pyautogui.screenshot(region=[high_value_x,high_value_y,high_value_x_width,high_value_x_height])
+test_high_str=pytesseract.image_to_string(test_img_high,lang='digits',config='--psm 7')
+test_high_float=float(test_high_str.replace(" ",""))
+end_time_high_value=time.time()
+
+#弹出窗口，人工比较下是否与看到的一致；一致说明窗口位置OK
+#cmd="c:\windows\system32\mshta.exe vbscript:msgbox(\""+this_stock_code+":\n"+str(data.price[data.price.index[-1]])+" "+time_2_record+"\",64,\"Title:TEST_OK?\")(windows,close)"
+cmd="c:\windows\system32\mshta.exe vbscript:msgbox(\""+"Now:"+test_value+"-----"+"High:"+test_high_str+"\",64,\"Title:TEST_OK?\")(windows,close)"
+subprocess.Popen(cmd)
+
+#这里增加断点，在最高价和现价判断正确情况下继续往下执行
+time.sleep(1)
+
+while SELL_ONCE>0:
+    #特别注意：参数格式是起始点(X,Y)，X宽度，Y高度
+    #识别捷利交易宝的现价数字，使用按键精灵抓抓（看鼠标坐标），可以看到数字是边框存在阴影的！！！不知是否这个原因导致无法识别
+    #img_scr=pyautogui.screenshot("c:\\20201110.png",region=[895,79,125,30])
+
+    #----是否需要增加对开始阶段没有最高价的容错判断？-----
+
+    NOW_img=pyautogui.screenshot(region=[now_value_x,now_value_y,now_value_x_width,now_value_x_height])
+    NOW_value_str=pytesseract.image_to_string(NOW_img,lang='digits',config='--psm 7')
+    NOW_value_float=float(NOW_value_str.replace(" ",""))
+
+    HIGH_img=pyautogui.screenshot(region=[high_value_x,high_value_y,high_value_x_width,high_value_x_height])
+    HIGH_value_str=pytesseract.image_to_string(HIGH_img,lang='digits',config='--psm 7')
+    HIGH_value_float=float(HIGH_value_str.replace(" ",""))
+
+    #20201201增加容错
+    #暗盘未开启前，捷利交易宝的最高价，最低价，今开价默认是0
+    if HIGH_value_float<NOW_value_float:
+        HIGH_value_float=NOW_value_float
+
+    if HIGH_value_float-NOW_value_float>=bear_line:
+        SELL_ONCE=0
+        cmd="c:\windows\system32\mshta.exe vbscript:msgbox(\""+"Now:"+NOW_value_str+"-----"+"High:"+HIGH_value_str+"\",64,\"Title:SELL!\")(windows,close)"
+        subprocess.Popen(cmd)
+
+        print("*****SELL OUT*****")
+        print(time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+        print("High:"+HIGH_value_str)
+        print("Now:"+NOW_value_str)
+
+        fo.write("\n")
+        fo.write("*****SELL OUT*****")
+        fo.write("\n")
+        fo.write(STOCK_CODE)
+        fo.write("\n")
+        time_2_record=time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+        fo.write(time_2_record)
+        fo.write("\n")
+        fo.write("High:")
+        fo.write(HIGH_value_str)
+        fo.write("\n")
+        fo.write("Now:")
+        fo.write(NOW_value_str)
+        fo.write("\n")
+
+fo.close()
